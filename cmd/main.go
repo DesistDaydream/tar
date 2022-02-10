@@ -88,6 +88,8 @@ func main() {
 	}
 
 	for _, file := range dataDirFiles {
+		// TODO:根据日期名称判断循环开始的目录(添加一个命令行标志，用来指定开始循环的目录)
+		// TODO:添加一个计数器，循环指定次数即停止
 		dataPath := fmt.Sprintf("%s%s%s", thFlags.ArchiveSrc, string(os.PathSeparator), file.Name())
 
 		logrus.WithFields(logrus.Fields{
@@ -95,6 +97,7 @@ func main() {
 			"日期路径": dataPath,
 		}).Debug("检查日期目录信息")
 
+		// 创建待归档目录
 		archiveDestPath := fmt.Sprintf("%s%s%s", tmpDir, string(os.PathSeparator), file.Name())
 		logrus.Debug("检查归档目标目录", archiveDestPath)
 
