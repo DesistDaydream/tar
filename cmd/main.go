@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/DesistDaydream/tar/pkg/handler"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -15,7 +16,7 @@ type tarFlags struct {
 	logFormat string
 }
 
-func (flags *tarFlags) AddYuqueExportFlags() {
+func (flags *tarFlags) TarFlags() {
 	pflag.StringVar(&flags.logLevel, "log-level", "info", "The logging level:[debug, info, warn, error, fatal]")
 	pflag.StringVar(&flags.logFile, "log-output", "", "the file which log to, default stdout")
 	pflag.StringVar(&flags.logFormat, "log-format", "text", "log format,one of: json|text")
@@ -62,59 +63,67 @@ func LogInit(level, file, format string) error {
 }
 
 func main() {
+	// 设置命令行标志
 	tarFlags := &tarFlags{}
-	tarFlags.AddYuqueExportFlags()
+	tarFlags.TarFlags()
 	thFlags := &handler.TarHandlerFlags{}
 	thFlags.AddFlag()
 
 	pflag.Parse()
 
-	// filepath.Walk(thFlags.ArchiveSrc, func(path string, info os.FileInfo, err error) error {
-	// 	if err != nil {
-	// 		return err
-	// 	}
-
-	// 	logrus.WithFields(logrus.Fields{
-	// 		"mode": info.Mode(),
-	// 		"name": info.Name(),
-	// 		"sys":  info.Sys(),
-	// 	}).Info()
-
-	// 	return nil
-	// })
-
-	files, err := os.ReadDir(thFlags.ArchiveSrc)
-	if err != nil {
-		panic("获取待打包目录下的内容失败")
+	// 初始化日志
+	if err := LogInit(tarFlags.logLevel, tarFlags.logFile, tarFlags.logFormat); err != nil {
+		logrus.Fatal(errors.Wrap(err, "set log level error"))
 	}
 
-	for _, file := range files {
-		oneLayerArchiveSrcPath := fmt.Sprintf("%s\\%s", thFlags.ArchiveSrc, file.Name())
+	currentDir, _ := os.Getwd()
+	logrus.Debug("当前工作目录：", currentDir)
+	tmpDir := currentDir + string(os.PathSeparator) + "tmp"
+
+	thFlags.ArchiveSrc = currentDir + string(os.PathSeparator) + thFlags.ArchiveSrc
+
+	dataDirFiles, err := os.ReadDir(thFlags.ArchiveSrc)
+	if err != nil {
+		panic("获取目录中的日期列表失败")
+	}
+
+	for _, file := range dataDirFiles {
+		dataPath := fmt.Sprintf("%s%s%s", thFlags.ArchiveSrc, string(os.PathSeparator), file.Name())
 
 		logrus.WithFields(logrus.Fields{
-			"oneLayerName": file.Name(),
-			"oneLayerPath": oneLayerArchiveSrcPath,
-		}).Info("检查第一层目录信息")
+			"日期名称": file.Name(),
+			"日期路径": dataPath,
+		}).Debug("检查日期目录信息")
 
-		archiveDestPath := fmt.Sprintf("tmp\\%s", file.Name())
+		archiveDestPath := fmt.Sprintf("%s%s%s", tmpDir, string(os.PathSeparator), file.Name())
+		logrus.Debug("检查归档目标目录", archiveDestPath)
+
 		err = os.MkdirAll(archiveDestPath, 0775)
 		if err != nil {
-			panic(fmt.Sprintf("创建目录出错，%s", err))
+			panic(fmt.Sprintf("检查归档目标目录出错，%s", err))
 		}
 
-		files, _ := os.ReadDir(oneLayerArchiveSrcPath)
-		for _, file := range files {
-			twoLayerArchiveSrcPath := fmt.Sprintf("%s\\%s", oneLayerArchiveSrcPath, file.Name())
+		err = os.Chdir(dataPath)
+		if err != nil {
+			panic(fmt.Sprintf("切换目录出错：%s", err))
+		}
+
+		nameDirFiles, err := os.ReadDir(dataPath)
+		if err != nil {
+			panic(fmt.Sprintf("获取 %s 目录中的名称列表失败:%s", dataPath, err))
+
+		}
+		for _, file := range nameDirFiles {
+			twoLayerArchiveSrcPath := fmt.Sprintf("%s%s%s", dataPath, string(os.PathSeparator), file.Name())
 
 			logrus.WithFields(logrus.Fields{
-				"twoLayerName": file.Name(),
-				"twoLayerPath": twoLayerArchiveSrcPath,
-			}).Info("检查第二层目录信息")
+				"姓名名称": file.Name(),
+				"姓名路径": twoLayerArchiveSrcPath,
+			}).Debug("检查第二层目录信息")
 
-			// archiveDestName := fmt.Sprintf("%s\\%s.tar.gz", archiveDestPath, file.Name())
-			archiveDestName := fmt.Sprintf("%s.tar.gz", file.Name())
-
-			os.Chdir(oneLayerArchiveSrcPath)
+			// archiveDestName := fmt.Sprintf("%s%s%s.tar.gz", archiveDestPath,string(os.PathSeparator), file.Name())
+			archiveDestName := fmt.Sprintf("%s%s%s.tar.gz", archiveDestPath, string(os.PathSeparator), file.Name())
+			logrus.Debug("检查归档目标名称", archiveDestName)
 
 			// 打包
 			err = handler.Archiving(file.Name(), archiveDestName)
