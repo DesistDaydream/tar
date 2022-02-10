@@ -78,7 +78,7 @@ func main() {
 
 	currentDir, _ := os.Getwd()
 	logrus.Debug("当前工作目录：", currentDir)
-	tmpDir := currentDir + string(os.PathSeparator) + "tmp"
+	tmpDir := currentDir + string(os.PathSeparator) + thFlags.ArchiveDest
 
 	thFlags.ArchiveSrc = currentDir + string(os.PathSeparator) + thFlags.ArchiveSrc
 
