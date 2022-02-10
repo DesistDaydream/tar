@@ -4,10 +4,11 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 func Archiving(src, dst string) (err error) {
@@ -25,7 +26,6 @@ func Archiving(src, dst string) (err error) {
 
 	// 创建 Tar.Writer 结构
 	tw := tar.NewWriter(gw)
-	// 如果需要启用 gzip 将上面代码注释，换成下面的
 
 	defer tw.Close()
 
@@ -78,7 +78,7 @@ func Archiving(src, dst string) (err error) {
 		}
 
 		// 记录下过程，这个可以不记录，这个看需要，这样可以看到打包的过程
-		log.Printf("成功打包 %s ，共写入了 %d 字节的数据\n", fileName, n)
+		logrus.Infof("成功打包 %s ，共写入了 %d 字节的数据\n", fileName, n)
 
 		return nil
 	})

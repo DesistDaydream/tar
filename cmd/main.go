@@ -94,7 +94,7 @@ func main() {
 		logrus.WithFields(logrus.Fields{
 			"oneLayerName": file.Name(),
 			"oneLayerPath": oneLayerArchiveSrcPath,
-		}).Info()
+		}).Info("检查第一层目录信息")
 
 		archiveDestPath := fmt.Sprintf("tmp\\%s", file.Name())
 		err = os.MkdirAll(archiveDestPath, 0775)
@@ -107,15 +107,19 @@ func main() {
 			twoLayerArchiveSrcPath := fmt.Sprintf("%s\\%s", oneLayerArchiveSrcPath, file.Name())
 
 			logrus.WithFields(logrus.Fields{
+				"twoLayerName": file.Name(),
 				"twoLayerPath": twoLayerArchiveSrcPath,
-			}).Info()
+			}).Info("检查第二层目录信息")
 
-			archiveDestName := fmt.Sprintf("%s\\%s.tar.gz", archiveDestPath, file.Name())
+			// archiveDestName := fmt.Sprintf("%s\\%s.tar.gz", archiveDestPath, file.Name())
+			archiveDestName := fmt.Sprintf("%s.tar.gz", file.Name())
+
+			os.Chdir(oneLayerArchiveSrcPath)
 
 			// 打包
-			err = handler.Archiving(twoLayerArchiveSrcPath, archiveDestName)
+			err = handler.Archiving(file.Name(), archiveDestName)
 			if err != nil {
-				logrus.Error(err)
+				logrus.Error("归档失败：", err)
 			}
 		}
 	}
