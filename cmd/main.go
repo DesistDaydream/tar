@@ -14,12 +14,16 @@ type tarFlags struct {
 	logLevel  string
 	logFile   string
 	logFormat string
+	startAt   string
+	count     int
 }
 
 func (flags *tarFlags) TarFlags() {
-	pflag.StringVar(&flags.logLevel, "log-level", "info", "The logging level:[debug, info, warn, error, fatal]")
-	pflag.StringVar(&flags.logFile, "log-output", "", "the file which log to, default stdout")
-	pflag.StringVar(&flags.logFormat, "log-format", "text", "log format,one of: json|text")
+	pflag.StringVar(&flags.logLevel, "log-level", "info", "日志级别:{debug, info, warn, error, fatal}")
+	pflag.StringVar(&flags.logFile, "log-output", "", "日志输出位置, 默认标准输出")
+	pflag.StringVar(&flags.logFormat, "log-format", "text", "日志格式:{json|text}")
+	pflag.StringVar(&flags.startAt, "start-at", "", "指定要开始归档的目录")
+	pflag.IntVar(&flags.count, "count", 10, "归档目录数量")
 
 }
 
@@ -77,19 +81,44 @@ func main() {
 	}
 
 	currentDir, _ := os.Getwd()
-	logrus.Debug("当前工作目录：", currentDir)
+	logrus.Debug("当前工作目录:", currentDir)
+
+	// 保存归档文件的绝对路径
 	tmpDir := currentDir + string(os.PathSeparator) + thFlags.ArchiveDest
+	// 归档源的绝对路径
+	archiveSrcPath := currentDir + string(os.PathSeparator) + thFlags.ArchiveSrc
 
-	thFlags.ArchiveSrc = currentDir + string(os.PathSeparator) + thFlags.ArchiveSrc
-
-	dataDirFiles, err := os.ReadDir(thFlags.ArchiveSrc)
+	// 获取归档源目录下的文件列表
+	dataDirFiles, err := os.ReadDir(archiveSrcPath)
 	if err != nil {
 		panic("获取目录中的日期列表失败")
 	}
 
+	// 用来判断是否开始循环的变量
+	var count int = 1
+	var isStart bool = false
+
 	for _, file := range dataDirFiles {
-		// TODO:根据日期名称判断循环开始的目录(添加一个命令行标志，用来指定开始循环的目录)
-		// TODO:添加一个计数器，循环指定次数即停止
+		// 判断是否开始循环的条件
+		// 条件1：当前目录名称必须为指定的名称
+		// 条件2：指定开始的目录名称不能为空
+		// 条件3：循环必须已经开始
+		// 当上述三个条件都成立，才会开始循环归档，否则跳过
+		if file.Name() != tarFlags.startAt && tarFlags.startAt != "" && !isStart {
+			logrus.Infof("跳过 %v 目录", file.Name())
+			continue
+		}
+		isStart = true
+
+		// 计数器，循环指定次数即停止
+		if count > tarFlags.count {
+			break
+		}
+		logrus.WithFields(logrus.Fields{
+			"当前工作次数": count,
+			"总工作次数":  tarFlags.count,
+		}).Debug("检查循环次数")
+
 		dataPath := fmt.Sprintf("%s%s%s", thFlags.ArchiveSrc, string(os.PathSeparator), file.Name())
 
 		logrus.WithFields(logrus.Fields{
@@ -134,6 +163,8 @@ func main() {
 				logrus.Error("归档失败：", err)
 			}
 		}
+
+		count++
 	}
 
 	// 待提取的文件
