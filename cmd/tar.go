@@ -91,7 +91,7 @@ func main() {
 	// 获取归档源目录下的文件列表
 	dataDirFiles, err := os.ReadDir(archiveSrcPath)
 	if err != nil {
-		panic("获取目录中的日期列表失败")
+		panic(fmt.Sprintf("获取 %s 目录中的日期列表失败:%s", archiveSrcPath, err))
 	}
 
 	// 用来判断是否开始循环的变量
@@ -114,27 +114,23 @@ func main() {
 		if count > tarFlags.count {
 			break
 		}
-		logrus.WithFields(logrus.Fields{
-			"当前工作次数": count,
-			"总工作次数":  tarFlags.count,
-		}).Debug("检查循环次数")
 
-		dataPath := fmt.Sprintf("%s%s%s", thFlags.ArchiveSrc, string(os.PathSeparator), file.Name())
-
-		logrus.WithFields(logrus.Fields{
-			"日期名称": file.Name(),
-			"日期路径": dataPath,
-		}).Debug("检查日期目录信息")
-
+		// 日期目录绝对路径
+		dataPath := fmt.Sprintf("%s%s%s", archiveSrcPath, string(os.PathSeparator), file.Name())
 		// 创建待归档目录
 		archiveDestPath := fmt.Sprintf("%s%s%s", tmpDir, string(os.PathSeparator), file.Name())
-		logrus.Debug("检查归档目标目录", archiveDestPath)
-
 		err = os.MkdirAll(archiveDestPath, 0775)
 		if err != nil {
-			panic(fmt.Sprintf("检查归档目标目录出错，%s", err))
+			panic(fmt.Sprintf("创建归档目标目录出错，%s", err))
 		}
 
+		logrus.WithFields(logrus.Fields{
+			"日期名称":   file.Name(),
+			"日期路径":   dataPath,
+			"归档目标目录": archiveDestPath,
+		}).Debug("检查目录信息")
+
+		// 变更目录
 		err = os.Chdir(dataPath)
 		if err != nil {
 			panic(fmt.Sprintf("切换目录出错：%s", err))
@@ -151,7 +147,7 @@ func main() {
 			logrus.WithFields(logrus.Fields{
 				"姓名名称": file.Name(),
 				"姓名路径": twoLayerArchiveSrcPath,
-			}).Debug("检查第二层目录信息")
+			}).Debug("检查姓名目录信息")
 
 			// archiveDestName := fmt.Sprintf("%s%s%s.tar.gz", archiveDestPath,string(os.PathSeparator), file.Name())
 			archiveDestName := fmt.Sprintf("%s%s%s.tar.gz", archiveDestPath, string(os.PathSeparator), file.Name())
