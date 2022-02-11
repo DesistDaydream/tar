@@ -6,30 +6,9 @@ import (
 	"compress/gzip"
 	"log"
 	"os"
+
+	"github.com/DesistDaydream/tar/pkg/archiving"
 )
-
-type ArchiveHandler interface {
-	Archiving()
-}
-
-// TODO: 改成接口
-var archivingWriter *tar.Writer
-
-// var archivingWriter *zip.Writer
-
-type tarWriter struct {
-}
-
-func (t *tarWriter) Archiving() {
-
-}
-
-type zipWriter struct {
-}
-
-func (t *zipWriter) Archiving() {
-
-}
 
 func Run(src, dst, extension string) (err error) {
 	// 创建文件
@@ -51,7 +30,9 @@ func Run(src, dst, extension string) (err error) {
 			}
 		}()
 
-		return Zip(zipWriter, dst)
+		z := archiving.NewZipWriter(zipWriter, src)
+		return z.Archiving()
+
 	case "tar.gz":
 		// 将 tar 包使用 gzip 压缩，其实添加压缩功能很简单，
 		// 只需要在 fw 和 archivingWriter 之前加上一层压缩就行了，和 Linux 的管道的感觉类似
@@ -59,11 +40,11 @@ func Run(src, dst, extension string) (err error) {
 		defer gzipWriter.Close()
 
 		// 创建 Tar.Writer 结构
-		archivingWriter = tar.NewWriter(gzipWriter)
+		writer := tar.NewWriter(gzipWriter)
+		defer writer.Close()
 
-		defer archivingWriter.Close()
-
-		return Targz(archivingWriter, src)
+		tarWriter := archiving.NewTarWriter(writer, src)
+		return tarWriter.Archiving()
 
 	default:
 		panic("请指定正确的程序扩展名")

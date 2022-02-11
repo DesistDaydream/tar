@@ -1,8 +1,7 @@
-package handler
+package archiving
 
 import (
 	"archive/tar"
-	"archive/zip"
 	"fmt"
 	"io"
 	"os"
@@ -12,12 +11,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Targz(archivingWriter *tar.Writer, src string) error {
+type TarWriter struct {
+	Writer *tar.Writer
+	Src    string
+}
+
+func NewTarWriter(writer *tar.Writer, src string) *TarWriter {
+	return &TarWriter{
+		Writer: writer,
+		Src:    src,
+	}
+}
+
+func (t *TarWriter) Archiving() error {
 	// 下面就该开始处理数据了，这里的思路就是递归处理目录及目录下的所有文件和目录
 	// 这里可以自己写个递归来处理，不过 Golang 提供了 filepath.Walk 函数，可以很方便的做这个事情
 	// 直接将这个函数的处理结果返回就行，需要传给它一个源文件或目录，它就可以自己去处理
 	// 我们就只需要去实现我们自己的 打包逻辑即可，不需要再去做路径相关的事情
-	return filepath.Walk(src, func(fileName string, fi os.FileInfo, err error) error {
+	return filepath.Walk(t.Src, func(fileName string, fi os.FileInfo, err error) error {
 		// 因为这个闭包会返回个 error ，所以先要处理一下这个
 		if err != nil {
 			return err
@@ -38,7 +49,7 @@ func Targz(archivingWriter *tar.Writer, src string) error {
 		hdr.Name = strings.TrimPrefix(fileName, string(filepath.Separator))
 
 		// 写入文件信息
-		if err := archivingWriter.WriteHeader(hdr); err != nil {
+		if err := t.Writer.WriteHeader(hdr); err != nil {
 			return err
 		}
 
@@ -56,7 +67,7 @@ func Targz(archivingWriter *tar.Writer, src string) error {
 		defer file.Close()
 
 		// copy 文件数据到 archivingWriter
-		n, err := io.Copy(archivingWriter, file)
+		n, err := io.Copy(t.Writer, file)
 		if err != nil {
 			return err
 		}
@@ -65,58 +76,6 @@ func Targz(archivingWriter *tar.Writer, src string) error {
 			"归档文件": fileName,
 			"文件大小": fmt.Sprintf("%v bytes", n),
 		}).Tracef("归档成功")
-
-		return nil
-	})
-}
-
-func Zip(zw *zip.Writer, src string) error {
-	// 下面来将文件写入 zw ，因为有可能会有很多个目录及文件，所以递归处理
-	return filepath.Walk(src, func(path string, fi os.FileInfo, errBack error) (err error) {
-		if errBack != nil {
-			return errBack
-		}
-
-		// 通过文件信息，创建 zip 的文件信息
-		fh, err := zip.FileInfoHeader(fi)
-		if err != nil {
-			return
-		}
-
-		// 替换文件信息中的文件名
-		fh.Name = strings.TrimPrefix(path, string(filepath.Separator))
-
-		// 这步开始没有加，会发现解压的时候说它不是个目录
-		if fi.IsDir() {
-			fh.Name += "/"
-		}
-
-		// 写入文件信息，并返回一个 Write 结构
-		w, err := zw.CreateHeader(fh)
-		if err != nil {
-			return
-		}
-
-		// 检测，如果不是标准文件就只写入头信息，不写入文件数据到 w
-		// 如目录，也没有数据需要写
-		if !fh.Mode().IsRegular() {
-			return nil
-		}
-
-		// 打开要压缩的文件
-		fr, err := os.Open(path)
-		if err != nil {
-			return
-		}
-		defer fr.Close()
-
-		// 将打开的文件 Copy 到 w
-		n, err := io.Copy(w, fr)
-		if err != nil {
-			return
-		}
-		// 输出压缩的内容
-		fmt.Printf("成功压缩文件： %s, 共写入了 %d 个字符的数据\n", path, n)
 
 		return nil
 	})

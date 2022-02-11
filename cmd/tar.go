@@ -100,12 +100,6 @@ func main() {
 		"归档目,根路径": archiveDestPath,
 	}).Info("运行前检查绝对路径")
 
-	// 并发
-	var wg sync.WaitGroup
-	defer wg.Wait()
-	// 控制并发
-	concurrenceControl := make(chan bool, tarFlags.goroutines)
-
 	// 用来判断是否开始循环的变量
 	var count int = 1
 	var isStart bool = false
@@ -115,11 +109,6 @@ func main() {
 		panic(fmt.Sprintf("获取日期目录 %s 的列表失败: %s", archiveSrcPath, err))
 	}
 	for _, dateFile := range dateDirFiles {
-		// 控制并发
-		concurrenceControl <- true
-		// 并发
-		wg.Add(1)
-
 		dateDirName := dateFile.Name()
 
 		// 判断是否开始循环的条件
@@ -153,39 +142,50 @@ func main() {
 			"归档目,日期路径": archiveDestDatePath,
 		}).Trace("检查日期信息")
 
-		go func(datePath, dateDirName, archiveDestPath string) {
+		// 变更目录
+		// go 并发与 os.Chdir 冲突，详见：https://github.com/golang/go/issues/27658
+		err = os.Chdir(datePath)
+		if err != nil {
+			panic(fmt.Sprintf("切换目录出错: %s", err))
+		}
+
+		// 并发
+		var wg sync.WaitGroup
+		defer wg.Wait()
+		// 控制并发
+		concurrenceControl := make(chan bool, tarFlags.goroutines)
+
+		// 获取日期目录下的姓名列表
+		nameDirFiles, err := os.ReadDir(datePath)
+		if err != nil {
+			panic(fmt.Sprintf("获取姓名目录 %s 的列表失败: %s", datePath, err))
+
+		}
+		for _, nameFile := range nameDirFiles {
+			// 控制并发
+			concurrenceControl <- true
 			// 并发
-			defer wg.Done()
+			wg.Add(1)
 
-			// 变更目录
-			// go 并发与 os.Chdir 冲突，详见：https://github.com/golang/go/issues/27658
-			err = os.Chdir(datePath)
-			if err != nil {
-				panic(fmt.Sprintf("切换目录出错: %s", err))
-			}
+			nameDirName := nameFile.Name()
 
-			// 获取日期目录下的姓名列表
-			nameDirFiles, err := os.ReadDir(datePath)
-			if err != nil {
-				panic(fmt.Sprintf("获取姓名目录 %s 的列表失败: %s", datePath, err))
+			cwd, _ := os.Getwd()
+			logrus.Debugf("当前在 %v 目录下操作 %v 用户目录\n", cwd, nameDirName)
 
-			}
-			for _, nameFile := range nameDirFiles {
-				nameDirName := nameFile.Name()
+			// 姓名目录的绝对路径
+			namePath := fmt.Sprintf("%s%s%s", datePath, string(os.PathSeparator), nameDirName)
 
-				cwd, _ := os.Getwd()
-				logrus.Debugf("当前在 %v 目录下操作 %v 用户目录\n", cwd, nameDirName)
+			// 归档目标文件名
+			archiveDestPathFile := fmt.Sprintf("%s%s%s.%s", archiveDestDatePath, string(os.PathSeparator), nameDirName, thFlags.Extension)
+			logrus.WithFields(logrus.Fields{
+				"归档源,姓名名称": nameDirName,
+				"归档源,姓名路径": namePath,
+				"归档目,文件路径": archiveDestPathFile,
+			}).Trace("检查姓名信息")
 
-				// 姓名目录的绝对路径
-				namePath := fmt.Sprintf("%s%s%s", datePath, string(os.PathSeparator), nameDirName)
-
-				// 归档目标文件名
-				archiveDestPathFile := fmt.Sprintf("%s%s%s.%s", archiveDestDatePath, string(os.PathSeparator), nameDirName, thFlags.Extension)
-				logrus.WithFields(logrus.Fields{
-					"归档源,姓名名称": nameDirName,
-					"归档源,姓名路径": namePath,
-					"归档目,文件路径": archiveDestPathFile,
-				}).Trace("检查姓名信息")
+			go func(archiveDestPathFile, nameDirName, archiveDestPath string) {
+				// 并发
+				defer wg.Done()
 
 				// 开始归档
 				// 第一个参数有两种选择
@@ -198,11 +198,10 @@ func main() {
 				} else {
 					logrus.Infof("%s/%s 归档成功", dateDirName, nameDirName)
 				}
-			}
-
-			// 控制并发
-			<-concurrenceControl
-		}(datePath, dateDirName, archiveDestPath)
+				// 控制并发
+				<-concurrenceControl
+			}(archiveDestPathFile, nameDirName, archiveDestPath)
+		}
 
 		count++
 	}
