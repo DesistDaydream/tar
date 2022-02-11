@@ -31,8 +31,8 @@ func Run(src, dst, extension string) (err error) {
 			}
 		}()
 
-		z := archiving.NewZipWriter(writer, src)
-		return z.Archiving()
+		zipWriter := archiving.NewZipWriter(writer, src)
+		return zipWriter.Archiving()
 
 	case "tar.gz":
 		// 将 tar 包使用 gzip 压缩，其实添加压缩功能很简单，
