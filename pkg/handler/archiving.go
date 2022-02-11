@@ -2,9 +2,11 @@ package handler
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,11 +24,21 @@ func Archiving(src, dst, extension string) (err error) {
 
 	// TODO: 改成接口
 	var archivingWriter *tar.Writer
+	// var archivingWriter *zip.Writer
 
 	switch extension {
-	// case "zip":
-	// 	archivingWriter = zip.NewWriter(fileDescriptor)
 	// TODO: 写个接口，分成两个
+	case "zip":
+		// 通过 fw 来创建 zip.Write
+		zw := zip.NewWriter(fileDescriptor)
+		defer func() {
+			// 检测一下是否成功关闭
+			if err := zw.Close(); err != nil {
+				log.Fatalln(err)
+			}
+		}()
+
+		return Zip(zw, dst)
 	case "tar.gz":
 		// 将 tar 包使用 gzip 压缩，其实添加压缩功能很简单，
 		// 只需要在 fw 和 archivingWriter 之前加上一层压缩就行了，和 Linux 的管道的感觉类似
@@ -37,11 +49,16 @@ func Archiving(src, dst, extension string) (err error) {
 		archivingWriter = tar.NewWriter(gzipWriter)
 
 		defer archivingWriter.Close()
+
+		return Targz(archivingWriter, src)
+
 	default:
 		panic("请指定正确的程序扩展名")
 
 	}
+}
 
+func Targz(archivingWriter *tar.Writer, src string) error {
 	// 下面就该开始处理数据了，这里的思路就是递归处理目录及目录下的所有文件和目录
 	// 这里可以自己写个递归来处理，不过 Golang 提供了 filepath.Walk 函数，可以很方便的做这个事情
 	// 直接将这个函数的处理结果返回就行，需要传给它一个源文件或目录，它就可以自己去处理
@@ -94,6 +111,58 @@ func Archiving(src, dst, extension string) (err error) {
 			"归档文件": fileName,
 			"文件大小": fmt.Sprintf("%v bytes", n),
 		}).Tracef("归档成功")
+
+		return nil
+	})
+}
+
+func Zip(zw *zip.Writer, src string) error {
+	// 下面来将文件写入 zw ，因为有可能会有很多个目录及文件，所以递归处理
+	return filepath.Walk(src, func(path string, fi os.FileInfo, errBack error) (err error) {
+		if errBack != nil {
+			return errBack
+		}
+
+		// 通过文件信息，创建 zip 的文件信息
+		fh, err := zip.FileInfoHeader(fi)
+		if err != nil {
+			return
+		}
+
+		// 替换文件信息中的文件名
+		fh.Name = strings.TrimPrefix(path, string(filepath.Separator))
+
+		// 这步开始没有加，会发现解压的时候说它不是个目录
+		if fi.IsDir() {
+			fh.Name += "/"
+		}
+
+		// 写入文件信息，并返回一个 Write 结构
+		w, err := zw.CreateHeader(fh)
+		if err != nil {
+			return
+		}
+
+		// 检测，如果不是标准文件就只写入头信息，不写入文件数据到 w
+		// 如目录，也没有数据需要写
+		if !fh.Mode().IsRegular() {
+			return nil
+		}
+
+		// 打开要压缩的文件
+		fr, err := os.Open(path)
+		if err != nil {
+			return
+		}
+		defer fr.Close()
+
+		// 将打开的文件 Copy 到 w
+		n, err := io.Copy(w, fr)
+		if err != nil {
+			return
+		}
+		// 输出压缩的内容
+		fmt.Printf("成功压缩文件： %s, 共写入了 %d 个字符的数据\n", path, n)
 
 		return nil
 	})

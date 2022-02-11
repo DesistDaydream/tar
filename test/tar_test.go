@@ -12,12 +12,11 @@ import (
 )
 
 type tarFlags struct {
-	logLevel   string
-	logFile    string
-	logFormat  string
-	startAt    string
-	count      int
-	goroutines int
+	logLevel  string
+	logFile   string
+	logFormat string
+	startAt   string
+	count     int
 }
 
 func (flags *tarFlags) TarFlags() {
@@ -26,7 +25,6 @@ func (flags *tarFlags) TarFlags() {
 	pflag.StringVar(&flags.logFormat, "log-format", "text", "日志格式:{json|text}")
 	pflag.StringVar(&flags.startAt, "start-at", "", "指定要开始归档的目录")
 	pflag.IntVar(&flags.count, "count", 10, "归档目录数量")
-	pflag.IntVar(&flags.goroutines, "goroutines", 1, "并发数量")
 }
 
 // LogInit 日志功能初始化，若指定了 log-output 命令行标志，则将日志写入到文件中
@@ -84,7 +82,7 @@ func main() {
 
 	// 初始化日志
 	if err := LogInit(tarFlags.logLevel, tarFlags.logFile, tarFlags.logFormat); err != nil {
-		logrus.Trace(errors.Wrap(err, "set log level error"))
+		logrus.Fatal(errors.Wrap(err, "set log level error"))
 	}
 
 	// 处理各种目录的绝对路径变量
@@ -103,8 +101,6 @@ func main() {
 	// 并发
 	var wg sync.WaitGroup
 	defer wg.Wait()
-	// 控制并发
-	concurrenceControl := make(chan bool, tarFlags.goroutines)
 
 	// 用来判断是否开始循环的变量
 	var count int = 1
@@ -115,8 +111,6 @@ func main() {
 		panic(fmt.Sprintf("获取日期目录 %s 的列表失败: %s", archiveSrcPath, err))
 	}
 	for _, dateFile := range dateDirFiles {
-		// 控制并发
-		concurrenceControl <- true
 		// 并发
 		wg.Add(1)
 
@@ -151,7 +145,7 @@ func main() {
 			"归档源,日期名称": dateDirName,
 			"归档源,日期路径": datePath,
 			"归档目,日期路径": archiveDestDatePath,
-		}).Trace("检查日期信息")
+		}).Debug("检查日期信息")
 
 		go func(datePath, dateDirName, archiveDestPath string) {
 			// 并发
@@ -174,7 +168,7 @@ func main() {
 				nameDirName := nameFile.Name()
 
 				cwd, _ := os.Getwd()
-				logrus.Debugf("当前在 %v 目录下操作 %v 用户目录\n", cwd, nameDirName)
+				fmt.Printf("当前在 %v 目录下将要操作 %v 用户目录\n", cwd, nameDirName)
 
 				// 姓名目录的绝对路径
 				namePath := fmt.Sprintf("%s%s%s", datePath, string(os.PathSeparator), nameDirName)
@@ -185,13 +179,13 @@ func main() {
 					"归档源,姓名名称": nameDirName,
 					"归档源,姓名路径": namePath,
 					"归档目,文件路径": archiveDestPathFile,
-				}).Trace("检查姓名信息")
+				}).Debug("检查姓名信息")
 
 				// 开始归档
 				// 第一个参数有两种选择
 				// 1. 使用完整路径，那么归档后的文件中，包含所有路径上的目录
 				// err = handler.Archiving(namePath, archiveDestPathFile, thFlags.Extension)
-				// 2. 使用文件名称，那么归档后的文件中，只包含文件名目录。注意：只使用文件名的话，需要切换目录，切换目录又与go并发有冲突
+				// 2. 使用文件名称，那么归档后的文件中，只包含文件名目录
 				err = handler.Archiving(nameDirName, archiveDestPathFile, thFlags.Extension)
 				if err != nil {
 					logrus.Errorf("%s/%s 归档失败: %s", dateDirName, nameDirName, err)
@@ -199,9 +193,6 @@ func main() {
 					logrus.Infof("%s/%s 归档成功", dateDirName, nameDirName)
 				}
 			}
-
-			// 控制并发
-			<-concurrenceControl
 		}(datePath, dateDirName, archiveDestPath)
 
 		count++
