@@ -3,6 +3,7 @@ package handler
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,23 +12,35 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Archiving(src, dst string) (err error) {
+func Archiving(src, dst, extension string) (err error) {
 	// 创建文件
-	fw, err := os.Create(dst)
+	fileDescriptor, err := os.Create(dst)
 	if err != nil {
 		return
 	}
-	defer fw.Close()
+	defer fileDescriptor.Close()
 
-	// 将 tar 包使用 gzip 压缩，其实添加压缩功能很简单，
-	// 只需要在 fw 和 tw 之前加上一层压缩就行了，和 Linux 的管道的感觉类似
-	gw := gzip.NewWriter(fw)
-	defer gw.Close()
+	// TODO: 改成接口
+	var archivingWriter *tar.Writer
 
-	// 创建 Tar.Writer 结构
-	tw := tar.NewWriter(gw)
+	switch extension {
+	// case "zip":
+	// 	archivingWriter = zip.NewWriter(fileDescriptor)
+	// TODO: 写个接口，分成两个
+	case "tar.gz":
+		// 将 tar 包使用 gzip 压缩，其实添加压缩功能很简单，
+		// 只需要在 fw 和 archivingWriter 之前加上一层压缩就行了，和 Linux 的管道的感觉类似
+		gzipWriter := gzip.NewWriter(fileDescriptor)
+		defer gzipWriter.Close()
 
-	defer tw.Close()
+		// 创建 Tar.Writer 结构
+		archivingWriter = tar.NewWriter(gzipWriter)
+
+		defer archivingWriter.Close()
+	default:
+		panic("请指定正确的程序扩展名")
+
+	}
 
 	// 下面就该开始处理数据了，这里的思路就是递归处理目录及目录下的所有文件和目录
 	// 这里可以自己写个递归来处理，不过 Golang 提供了 filepath.Walk 函数，可以很方便的做这个事情
@@ -54,7 +67,7 @@ func Archiving(src, dst string) (err error) {
 		hdr.Name = strings.TrimPrefix(fileName, string(filepath.Separator))
 
 		// 写入文件信息
-		if err := tw.WriteHeader(hdr); err != nil {
+		if err := archivingWriter.WriteHeader(hdr); err != nil {
 			return err
 		}
 
@@ -71,14 +84,17 @@ func Archiving(src, dst string) (err error) {
 		}
 		defer file.Close()
 
-		// copy 文件数据到 tw
-		n, err := io.Copy(tw, file)
+		// copy 文件数据到 archivingWriter
+		n, err := io.Copy(archivingWriter, file)
 		if err != nil {
 			return err
 		}
 
-		// 记录下过程，这个可以不记录，这个看需要，这样可以看到打包的过程
-		logrus.Infof("成功打包 %s ，共写入了 %d 字节的数据\n", fileName, n)
+		logrus.WithFields(logrus.Fields{
+			"归档文件": fileName,
+			"文件大小": fmt.Sprintf("%v bytes", n),
+			// "文件大小": n,"bytes",
+		}).Debugf("归档成功")
 
 		return nil
 	})

@@ -105,14 +105,14 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("获取日期目录 %s 的列表失败: %s", archiveSrcPath, err))
 	}
-	for _, file := range dataDirFiles {
+	for _, dataFile := range dataDirFiles {
 		// 判断是否开始循环的条件
 		// 条件1：当前目录名称必须为指定的名称
 		// 条件2：指定开始的目录名称不能为空
 		// 条件3：循环必须已经开始
 		// 当上述三个条件都成立，才会开始循环归档，否则跳过
-		if file.Name() != tarFlags.startAt && tarFlags.startAt != "" && !isStart {
-			logrus.Infof("跳过 %v 目录", file.Name())
+		if dataFile.Name() != tarFlags.startAt && tarFlags.startAt != "" && !isStart {
+			logrus.Infof("跳过 %v 目录", dataFile.Name())
 			continue
 		}
 		isStart = true
@@ -123,16 +123,16 @@ func main() {
 		}
 
 		// 日期目录绝对路径
-		dataPath := fmt.Sprintf("%s%s%s", archiveSrcPath, string(os.PathSeparator), file.Name())
-		// 创建待归档目录
-		archiveDestPath := fmt.Sprintf("%s%s%s", archiveDestPath, string(os.PathSeparator), file.Name())
+		dataPath := fmt.Sprintf("%s%s%s", archiveSrcPath, string(os.PathSeparator), dataFile.Name())
+		// 创建归档目标目录
+		archiveDestPath := fmt.Sprintf("%s%s%s", archiveDestPath, string(os.PathSeparator), dataFile.Name())
 		err = os.MkdirAll(archiveDestPath, 0775)
 		if err != nil {
 			panic(fmt.Sprintf("创建归档目标目录出错: %s", err))
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"日期名称":   file.Name(),
+			"日期名称":   dataFile.Name(),
 			"日期路径":   dataPath,
 			"归档目标目录": archiveDestPath,
 		}).Debug("检查目录信息")
@@ -148,22 +148,25 @@ func main() {
 			panic(fmt.Sprintf("获取姓名目录 %s 的列表失败: %s", dataPath, err))
 
 		}
-		for _, file := range nameDirFiles {
-			twoLayerArchiveSrcPath := fmt.Sprintf("%s%s%s", dataPath, string(os.PathSeparator), file.Name())
+		for _, nameFile := range nameDirFiles {
+			namePath := fmt.Sprintf("%s%s%s", dataPath, string(os.PathSeparator), nameFile.Name())
 
 			logrus.WithFields(logrus.Fields{
-				"姓名名称": file.Name(),
-				"姓名路径": twoLayerArchiveSrcPath,
+				"姓名名称": nameFile.Name(),
+				"姓名路径": namePath,
 			}).Debug("检查姓名目录信息")
 
-			archiveDestName := fmt.Sprintf("%s%s%s%s", archiveDestPath, string(os.PathSeparator), file.Name(), thFlags.Extension)
-			logrus.Debug("检查归档目标名称", archiveDestName)
+			archiveDestName := fmt.Sprintf("%s%s%s.%s", archiveDestPath, string(os.PathSeparator), nameFile.Name(), thFlags.Extension)
+			logrus.WithFields(logrus.Fields{
+				"文件名": archiveDestName,
+			}).Debug("检查归档目标")
 
 			// 打包
-			err = handler.Archiving(file.Name(), archiveDestName)
+			err = handler.Archiving(nameFile.Name(), archiveDestName, thFlags.Extension)
 			if err != nil {
 				logrus.Error("归档失败: ", err)
 			}
+			logrus.Infof("归档成功 %s/%s", dataFile.Name(), nameFile.Name())
 		}
 
 		count++

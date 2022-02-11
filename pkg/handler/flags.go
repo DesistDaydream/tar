@@ -12,5 +12,5 @@ type TarHandlerFlags struct {
 func (flags *TarHandlerFlags) AddFlag() {
 	pflag.StringVar(&flags.ArchiveSrc, "archive-src", "test_tar_dir", "待打包的目录，当前目录的相对路径")
 	pflag.StringVar(&flags.ArchiveDest, "archive-dest", "tmp", "打包后保存的目录，当前目录的相对路径")
-	pflag.StringVar(&flags.Extension, "extension", ".tar.gz", "归档包文件的扩展名")
+	pflag.StringVar(&flags.Extension, "extension", "tar.gz", "归档包文件的扩展名")
 }
