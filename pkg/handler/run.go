@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/DesistDaydream/tar/pkg/archiving"
+	"github.com/sirupsen/logrus"
 )
 
 func Run(src, dst, extension string) (err error) {
@@ -22,15 +23,15 @@ func Run(src, dst, extension string) (err error) {
 	// TODO: 写个接口，分成两个
 	case "zip":
 		// 通过 fw 来创建 zip.Write
-		zipWriter := zip.NewWriter(fileDescriptor)
+		writer := zip.NewWriter(fileDescriptor)
 		defer func() {
 			// 检测一下是否成功关闭
-			if err := zipWriter.Close(); err != nil {
+			if err := writer.Close(); err != nil {
 				log.Fatalln(err)
 			}
 		}()
 
-		z := archiving.NewZipWriter(zipWriter, src)
+		z := archiving.NewZipWriter(writer, src)
 		return z.Archiving()
 
 	case "tar.gz":
@@ -41,6 +42,13 @@ func Run(src, dst, extension string) (err error) {
 
 		// 创建 Tar.Writer 结构
 		writer := tar.NewWriter(gzipWriter)
+		defer func() {
+			// 检测一下是否成功关闭
+			if err := writer.Close(); err != nil {
+				logrus.Error(err)
+			}
+		}()
+
 		defer writer.Close()
 
 		tarWriter := archiving.NewTarWriter(writer, src)
