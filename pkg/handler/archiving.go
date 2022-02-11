@@ -3,60 +3,14 @@ package handler
 import (
 	"archive/tar"
 	"archive/zip"
-	"compress/gzip"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 )
-
-func Archiving(src, dst, extension string) (err error) {
-	// 创建文件
-	fileDescriptor, err := os.Create(dst)
-	if err != nil {
-		return
-	}
-	defer fileDescriptor.Close()
-
-	// TODO: 改成接口
-	var archivingWriter *tar.Writer
-	// var archivingWriter *zip.Writer
-
-	switch extension {
-	// TODO: 写个接口，分成两个
-	case "zip":
-		// 通过 fw 来创建 zip.Write
-		zw := zip.NewWriter(fileDescriptor)
-		defer func() {
-			// 检测一下是否成功关闭
-			if err := zw.Close(); err != nil {
-				log.Fatalln(err)
-			}
-		}()
-
-		return Zip(zw, dst)
-	case "tar.gz":
-		// 将 tar 包使用 gzip 压缩，其实添加压缩功能很简单，
-		// 只需要在 fw 和 archivingWriter 之前加上一层压缩就行了，和 Linux 的管道的感觉类似
-		gzipWriter := gzip.NewWriter(fileDescriptor)
-		defer gzipWriter.Close()
-
-		// 创建 Tar.Writer 结构
-		archivingWriter = tar.NewWriter(gzipWriter)
-
-		defer archivingWriter.Close()
-
-		return Targz(archivingWriter, src)
-
-	default:
-		panic("请指定正确的程序扩展名")
-
-	}
-}
 
 func Targz(archivingWriter *tar.Writer, src string) error {
 	// 下面就该开始处理数据了，这里的思路就是递归处理目录及目录下的所有文件和目录

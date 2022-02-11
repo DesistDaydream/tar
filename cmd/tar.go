@@ -192,7 +192,7 @@ func main() {
 				// 1. 使用完整路径，那么归档后的文件中，包含所有路径上的目录
 				// err = handler.Archiving(namePath, archiveDestPathFile, thFlags.Extension)
 				// 2. 使用文件名称，那么归档后的文件中，只包含文件名目录。注意：只使用文件名的话，需要切换目录，切换目录又与go并发有冲突
-				err = handler.Archiving(nameDirName, archiveDestPathFile, thFlags.Extension)
+				err = handler.Run(nameDirName, archiveDestPathFile, thFlags.Extension)
 				if err != nil {
 					logrus.Errorf("%s/%s 归档失败: %s", dateDirName, nameDirName, err)
 				} else {
