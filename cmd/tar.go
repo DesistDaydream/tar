@@ -92,9 +92,9 @@ func main() {
 	// 归档目目录的绝对路径
 	archiveDestPath := workPath + string(os.PathSeparator) + thFlags.ArchiveDest
 	logrus.WithFields(logrus.Fields{
-		"工作路径":  workPath,
-		"归档源路径": archiveSrcPath,
-		"归档目路径": archiveDestPath,
+		"工作路径":    workPath,
+		"归档源,根路径": archiveSrcPath,
+		"归档目,根路径": archiveDestPath,
 	}).Info("运行前检查绝对路径")
 
 	// 用来判断是否开始循环的变量
@@ -122,7 +122,7 @@ func main() {
 			break
 		}
 
-		// 日期目录绝对路径
+		// 日期目录的绝对路径
 		dataPath := fmt.Sprintf("%s%s%s", archiveSrcPath, string(os.PathSeparator), dataFile.Name())
 		// 创建归档目标目录
 		archiveDestPath := fmt.Sprintf("%s%s%s", archiveDestPath, string(os.PathSeparator), dataFile.Name())
@@ -132,10 +132,10 @@ func main() {
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"日期名称":   dataFile.Name(),
-			"日期路径":   dataPath,
-			"归档目标目录": archiveDestPath,
-		}).Debug("检查目录信息")
+			"归档源,日期名称": dataFile.Name(),
+			"归档源,日期路径": dataPath,
+			"归档目,日期路径": archiveDestPath,
+		}).Debug("检查日期信息")
 
 		// 变更目录
 		err = os.Chdir(dataPath)
@@ -143,30 +143,34 @@ func main() {
 			panic(fmt.Sprintf("切换目录出错：%s", err))
 		}
 
+		// 获取日期目录下的姓名列表
 		nameDirFiles, err := os.ReadDir(dataPath)
 		if err != nil {
 			panic(fmt.Sprintf("获取姓名目录 %s 的列表失败: %s", dataPath, err))
 
 		}
 		for _, nameFile := range nameDirFiles {
+			// 姓名目录的绝对路径
 			namePath := fmt.Sprintf("%s%s%s", dataPath, string(os.PathSeparator), nameFile.Name())
 
+			// 归档目标文件名
+			archiveDestPathFile := fmt.Sprintf("%s%s%s.%s", archiveDestPath, string(os.PathSeparator), nameFile.Name(), thFlags.Extension)
 			logrus.WithFields(logrus.Fields{
-				"姓名名称": nameFile.Name(),
-				"姓名路径": namePath,
-			}).Debug("检查姓名目录信息")
+				"归档源,姓名名称": nameFile.Name(),
+				"归档源,姓名路径": namePath,
+				"归档目,文件路径": archiveDestPathFile,
+			}).Debug("检查姓名信息")
 
-			archiveDestName := fmt.Sprintf("%s%s%s.%s", archiveDestPath, string(os.PathSeparator), nameFile.Name(), thFlags.Extension)
-			logrus.WithFields(logrus.Fields{
-				"文件名": archiveDestName,
-			}).Debug("检查归档目标")
-
-			// 打包
-			err = handler.Archiving(nameFile.Name(), archiveDestName, thFlags.Extension)
+			// 开始归档
+			// 第一个参数有两种选择
+			// 1. 使用完整路径，那么归档后的文件中，包含所有路径上的目录
+			// 2. 使用文件名称，那么归档后的文件中，只包含文件名目录
+			err = handler.Archiving(nameFile.Name(), archiveDestPathFile, thFlags.Extension)
 			if err != nil {
-				logrus.Error("归档失败: ", err)
+				logrus.Errorf("%s/%s 归档失败: %s", dataFile.Name(), nameFile.Name(), err)
+			} else {
+				logrus.Infof("%s/%s 归档成功", dataFile.Name(), nameFile.Name())
 			}
-			logrus.Infof("归档成功 %s/%s", dataFile.Name(), nameFile.Name())
 		}
 
 		count++

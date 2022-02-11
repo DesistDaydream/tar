@@ -93,8 +93,7 @@ func Archiving(src, dst, extension string) (err error) {
 		logrus.WithFields(logrus.Fields{
 			"归档文件": fileName,
 			"文件大小": fmt.Sprintf("%v bytes", n),
-			// "文件大小": n,"bytes",
-		}).Debugf("归档成功")
+		}).Tracef("归档成功")
 
 		return nil
 	})
