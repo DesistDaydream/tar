@@ -24,7 +24,6 @@ func (flags *tarFlags) TarFlags() {
 	pflag.StringVar(&flags.logFormat, "log-format", "text", "日志格式:{json|text}")
 	pflag.StringVar(&flags.startAt, "start-at", "", "指定要开始归档的目录")
 	pflag.IntVar(&flags.count, "count", 10, "归档目录数量")
-
 }
 
 // LogInit 日志功能初始化，若指定了 log-output 命令行标志，则将日志写入到文件中
@@ -66,6 +65,11 @@ func LogInit(level, file, format string) error {
 	return nil
 }
 
+var (
+	// 程序所在的工作目录
+	workPath string
+)
+
 func main() {
 	// 设置命令行标志
 	tarFlags := &tarFlags{}
@@ -80,24 +84,27 @@ func main() {
 		logrus.Fatal(errors.Wrap(err, "set log level error"))
 	}
 
-	currentDir, _ := os.Getwd()
-	logrus.Debug("当前工作目录:", currentDir)
-
-	// 保存归档文件的绝对路径
-	tmpDir := currentDir + string(os.PathSeparator) + thFlags.ArchiveDest
-	// 归档源的绝对路径
-	archiveSrcPath := currentDir + string(os.PathSeparator) + thFlags.ArchiveSrc
-
-	// 获取归档源目录下的文件列表
-	dataDirFiles, err := os.ReadDir(archiveSrcPath)
-	if err != nil {
-		panic(fmt.Sprintf("获取 %s 目录中的日期列表失败:%s", archiveSrcPath, err))
-	}
+	// 处理各种目录的绝对路径变量
+	// 工作目录的绝对路径
+	workPath, _ = os.Getwd()
+	// 归档源目录的绝对路径
+	archiveSrcPath := workPath + string(os.PathSeparator) + thFlags.ArchiveSrc
+	// 归档目目录的绝对路径
+	archiveDestPath := workPath + string(os.PathSeparator) + thFlags.ArchiveDest
+	logrus.WithFields(logrus.Fields{
+		"工作路径":  workPath,
+		"归档源路径": archiveSrcPath,
+		"归档目路径": archiveDestPath,
+	}).Info("运行前检查绝对路径")
 
 	// 用来判断是否开始循环的变量
 	var count int = 1
 	var isStart bool = false
-
+	// 获取归档源目录下的文件列表
+	dataDirFiles, err := os.ReadDir(archiveSrcPath)
+	if err != nil {
+		panic(fmt.Sprintf("获取日期目录 %s 的列表失败: %s", archiveSrcPath, err))
+	}
 	for _, file := range dataDirFiles {
 		// 判断是否开始循环的条件
 		// 条件1：当前目录名称必须为指定的名称
@@ -118,10 +125,10 @@ func main() {
 		// 日期目录绝对路径
 		dataPath := fmt.Sprintf("%s%s%s", archiveSrcPath, string(os.PathSeparator), file.Name())
 		// 创建待归档目录
-		archiveDestPath := fmt.Sprintf("%s%s%s", tmpDir, string(os.PathSeparator), file.Name())
+		archiveDestPath := fmt.Sprintf("%s%s%s", archiveDestPath, string(os.PathSeparator), file.Name())
 		err = os.MkdirAll(archiveDestPath, 0775)
 		if err != nil {
-			panic(fmt.Sprintf("创建归档目标目录出错，%s", err))
+			panic(fmt.Sprintf("创建归档目标目录出错: %s", err))
 		}
 
 		logrus.WithFields(logrus.Fields{
@@ -138,7 +145,7 @@ func main() {
 
 		nameDirFiles, err := os.ReadDir(dataPath)
 		if err != nil {
-			panic(fmt.Sprintf("获取 %s 目录中的名称列表失败:%s", dataPath, err))
+			panic(fmt.Sprintf("获取姓名目录 %s 的列表失败: %s", dataPath, err))
 
 		}
 		for _, file := range nameDirFiles {
@@ -149,14 +156,13 @@ func main() {
 				"姓名路径": twoLayerArchiveSrcPath,
 			}).Debug("检查姓名目录信息")
 
-			// archiveDestName := fmt.Sprintf("%s%s%s.tar.gz", archiveDestPath,string(os.PathSeparator), file.Name())
-			archiveDestName := fmt.Sprintf("%s%s%s.tar.gz", archiveDestPath, string(os.PathSeparator), file.Name())
+			archiveDestName := fmt.Sprintf("%s%s%s%s", archiveDestPath, string(os.PathSeparator), file.Name(), thFlags.Extension)
 			logrus.Debug("检查归档目标名称", archiveDestName)
 
 			// 打包
 			err = handler.Archiving(file.Name(), archiveDestName)
 			if err != nil {
-				logrus.Error("归档失败：", err)
+				logrus.Error("归档失败: ", err)
 			}
 		}
 
